@@ -1,5 +1,14 @@
 {
   "name": "cheda.kr",
   "version": "0.0.0",
-  "scripts": {}
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "deploy": "turbo deploy"
+  },
+  "devDependencies": {
+    "turbo": "^1.13.2"
+  }
 }

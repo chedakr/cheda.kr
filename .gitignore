@@ -15,5 +15,7 @@ yarn-error.log*
 
 .vercel
 
-.next
 out
+build/**
+dist/**
+.next/**
