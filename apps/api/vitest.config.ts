@@ -8,4 +8,9 @@ export default defineWorkersConfig({
       },
     },
   },
+  resolve: {
+    alias: {
+      "@": "./src",
+    },
+  },
 });

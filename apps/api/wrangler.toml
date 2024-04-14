@@ -14,6 +14,9 @@ routes = [
 # [vars]
 # MY_VARIABLE = "production_value"
 
+[vars]
+OAUTH_CLIENT_ID_NAVER = "aBv6Idu9xDrzo71qfpak"
+
 # Bind the Workers AI model catalog. Run machine learning models, powered by serverless GPUs, on Cloudflare’s global network
 # Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#workers-ai
 # [ai]

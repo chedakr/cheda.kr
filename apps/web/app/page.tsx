@@ -1,16 +1,13 @@
-"use client";
-
-import { useEffect } from 'react';
-import Link from "next/link";
+import Image from 'next/image';
+import NaverLoginButton from './components/naver-login-button/button';
+import logoImage from './cheda-transparent.png';
 
 export default function Home() {
-  useEffect(() => {
-    window.location.href = "https://buffer.cheda.kr/news";
-  }, []);
-
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <Link href="https://buffer.cheda.kr/news">버퍼 : 치지직 확장 프로그램으로 이동</Link>
+    <main className="flex min-h-screen flex-col items-center justify-center p-24 gap-5">
+      <Image src={logoImage} alt="Cheda Logo" width={132} height={147} unoptimized />
+
+      <NaverLoginButton />
     </main>
   );
 }
