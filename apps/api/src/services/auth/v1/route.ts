@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
 import { Env } from '@/typings';
 
 type OAuthResponse = {
@@ -36,6 +37,12 @@ const collectResponse = async (response?: Response, fallback: string = '') => {
 const app = new Hono<{ Bindings: Env }>();
 
 app.get('/login', async (c) => {
+	const cache = await caches.open('auth');
+	const prevState = getCookie(c, 'state');
+	if (prevState) {
+		await cache.delete(new Request(`http://localhost/__auth/${prevState}`, { method: 'GET' }));
+	}
+
 	const url = new URL(`https://nid.naver.com/oauth2.0/authorize`);
 	url.searchParams.append('response_type', 'code');
 	url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
@@ -49,7 +56,6 @@ app.get('/login', async (c) => {
 		prevUrl = new URL(c.req.query('prevUrl') ?? c.req.header('Referer') ?? '').toString();
 	} catch (e) {}
 
-	const cache = await caches.open('auth');
 	await cache.put(
 		new Request(`http://localhost/__auth/${state}`, { method: 'GET' }),
 		new Response(prevUrl, {
@@ -58,27 +64,33 @@ app.get('/login', async (c) => {
 			},
 		}),
 	);
+
+	setCookie(c, 'state', state, { httpOnly: true });
+
 	return c.redirect(url.toString());
 });
 
 app.get('/callback', async (c) => {
 	const code = c.req.query('code');
-	const state = c.req.query('state');
+	const state = getCookie(c, 'state');
+
+	deleteCookie(c, 'state');
 
 	const cache = await caches.open('auth');
 	const cached = await cache.match(new Request(`http://localhost/__auth/${state}`, { method: 'GET' }));
 
-	if (!code || !state || !cached) {
+	if (!code || !state || state !== c.req.query('state') || !cached) {
 		return c.json({ message: 'Invalid request' }, 400);
 	}
+	const prevUrl = await collectResponse(cached);
+
+	await cache.delete(new Request(`http://localhost/__auth/${state}`, { method: 'GET' }));
 
 	const url = new URL('https://nid.naver.com/oauth2.0/token');
 	url.searchParams.append('grant_type', 'authorization_code');
 	url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
 	url.searchParams.append('client_secret', c.env.OAUTH_CLIENT_SECRET_NAVER);
 	url.searchParams.append('code', code);
-
-	const prevUrl = await collectResponse(cached);
 
 	const response = await fetch(url);
 
