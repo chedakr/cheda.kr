@@ -16,6 +16,7 @@ routes = [
 
 [vars]
 OAUTH_CLIENT_ID_NAVER = "aBv6Idu9xDrzo71qfpak"
+API_ORIGIN = "https://api.cheda.kr"
 
 # Bind the Workers AI model catalog. Run machine learning models, powered by serverless GPUs, on Cloudflare’s global network
 # Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#workers-ai
@@ -38,6 +39,11 @@ OAUTH_CLIENT_ID_NAVER = "aBv6Idu9xDrzo71qfpak"
 # binding = "MY_DB"
 # database_name = "my-database"
 # database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+[[d1_databases]]
+binding = "DB" # i.e. available in your Worker on env.DB
+database_name = "prod-cheda"
+database_id = "d2184e54-5e66-4624-8394-c9ccbebe36a1"
 
 # Bind a dispatch namespace. Use Workers for Platforms to deploy serverless functions programmatically on behalf of your customers.
 # Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#dispatch-namespace-bindings-workers-for-platforms
