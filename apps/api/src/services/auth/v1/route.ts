@@ -98,9 +98,9 @@ app.get('/logout', async (c) => {
 	if (!matched) {
 		return c.redirect(prevUrl);
 	}
-
 	const user = JSON.parse(await collectResponse(matched));
 
+	/*
 	const url = new URL('https://nid.naver.com/oauth2.0/token');
 	url.searchParams.append('grant_type', 'delete');
 	url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
@@ -110,6 +110,7 @@ app.get('/logout', async (c) => {
 
 	const response = await fetch(url);
 	const result = await response.json() as DeleteTokenRespone;
+	*/
 
 	await cache.delete(new Request(`http://localhost/__auth/${sessionId}`, { method: 'GET' }));
 
@@ -245,18 +246,28 @@ app.get('/login', async (c) => {
 });
 
 app.get('/callback', async (c) => {
-	const code = c.req.query('code');
 	const state = getCookie(c, 'state');
-
 	deleteCookie(c, 'state');
+
+	if (!state) {
+		return c.json({ message: 'Forbidden' }, 403);
+	}
 
 	const cache = await caches.open('auth');
 	const cached = await cache.match(new Request(`http://localhost/__auth/${state}`, { method: 'GET' }));
-
-	if (!code || !state || state !== c.req.query('state') || !cached) {
-		return c.json({ message: 'Invalid request' }, 400);
+	if (!cached) {
+		return c.json({ message: 'Forbidden' }, 403);
 	}
 	const prevUrl = await collectResponse(cached);
+
+	const code = c.req.query('code');
+	if (!code) {
+		return c.redirect(prevUrl);
+	}
+
+	if (!state || state !== c.req.query('state')) {
+		return c.json({ message: 'Invalid request' }, 400);
+	}
 
 	await cache.delete(new Request(`http://localhost/__auth/${state}`, { method: 'GET' }));
 

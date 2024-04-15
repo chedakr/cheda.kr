@@ -10,6 +10,7 @@
     "deploy": "gh-pages --nojekyll -d out"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.29.2",
     "next": "14.1.4",
     "react": "^18",
     "react-dom": "^18"
