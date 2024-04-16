@@ -1,16 +1,17 @@
-"use client";
+import Image from 'next/image';
+import Link from 'next/link';
 
-import { useEffect } from 'react';
-import Link from "next/link";
+import bufferLogoImage from './icon-resized.png';
 
 export default function Home() {
-  useEffect(() => {
-    window.location.href = "https://buffer.cheda.kr/news";
-  }, []);
-
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <Link href="https://buffer.cheda.kr/news">버퍼 : 치지직 확장 프로그램으로 이동</Link>
-    </main>
+    <section className="pt-24">
+      <Link href="https://buffer.cheda.kr">
+        <div className="flex flex-col items-center gap-3">
+          <Image {...bufferLogoImage} width="114" height="114" alt="버퍼 확장 프로그램" unoptimized />
+          <div className="text-2xl font-bold">버퍼</div>
+        </div>
+      </Link>
+    </section>
   );
 }
