@@ -1,9 +1,13 @@
 "use client";
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+
 import Link from 'next/link';
 import Image from 'next/image';
-import loginButtonImage from './btnG_official.png';
+import { Skeleton } from "@/components/ui/skeleton"
+
+import loginButtonImage from './btnG_short.png';
+import logoutButtonImage from './btnG_logout.png';
 
 export default function NaverLoginButton() {
   const queryClient = useQueryClient();
@@ -21,21 +25,23 @@ export default function NaverLoginButton() {
     },
   });
 
-  if (query.isLoading) return null;
+  if (query.isLoading) {
+    return <Skeleton className="w-[113px] h-[40px]" />;
+  }
 
   if (query.data) {
     return (
       <Link onClick={() => {
         queryClient.invalidateQueries({ queryKey: ['auth'] });
       }} href={`http://localhost:8787/services/auth/v1/logout`}>
-        로그아웃
+        <Image src={logoutButtonImage} alt="Naver 로그아웃" width={113} height={40} unoptimized />
       </Link>
     );
   }
 
   return (
     <Link href={`http://localhost:8787/services/auth/v1/login`}>
-      <Image src={loginButtonImage} alt="Naver 로그인" width={230} height={50} unoptimized />
+      <Image src={loginButtonImage} alt="Naver 로그인" width={113} height={40} unoptimized />
     </Link>
   );
 }
