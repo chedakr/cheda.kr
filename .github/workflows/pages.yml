@@ -33,4 +33,7 @@ jobs:
       - name: Build
         run: pnpm --filter=web run build
       - name: Deploy to GitHub Pages
-        run: pnpm --filter=web run deploy
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./apps/web/out
