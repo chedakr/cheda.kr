@@ -1,10 +1,9 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import ReactQueryProvider from "@/components/react-query-provider";
 import { ThemeProvider } from '@/components/theme-provider';
-
-const inter = Inter({ subsets: ["latin"] });
+import { cn } from '@/lib/utils';
+import { inter } from './fonts';
 
 export const metadata: Metadata = {
   title: "체다",
@@ -18,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
       <html lang="ko" suppressHydrationWarning>
-        <body className={inter.className}>
+        <body className={cn(inter.className, 'antialiased')}>
           <ThemeProvider
             attribute="class"
             defaultTheme="system"
