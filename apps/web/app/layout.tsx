@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { GoogleAnalytics } from '@next/third-parties/google';
 import ReactQueryProvider from "@/components/react-query-provider";
 import { ThemeProvider } from '@/components/theme-provider';
 import Header from '@/components/header';
@@ -39,6 +40,7 @@ export default function RootLayout({
             </div>
           </ReactQueryProvider>
         </ThemeProvider>
+        <GoogleAnalytics gaId="G-CZ9TCT1D48" />
       </body>
     </html>
   );
