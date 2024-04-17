@@ -8,7 +8,12 @@ import { notoSans } from './fonts';
 
 export const metadata: Metadata = {
   title: "체다",
-  description: "스트리밍 플랫폼 치지직 이용자 모두의 오픈소스 커뮤니티",
+  description: "스트리밍 플랫폼 치지직의 서드파티 서비스들을 만듭니다",
+};
+
+export const viewport: Metadata = {
+  themeColor: "#fbbf24",
+  colorScheme: "dark light",
 };
 
 export default function RootLayout({
