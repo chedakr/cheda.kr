@@ -17,6 +17,9 @@ importers:
       '@libsql/client':
         specifier: ^0.6.0
         version: 0.6.0
+      '@tsndr/cloudflare-worker-jwt':
+        specifier: ^2.5.3
+        version: 2.5.3
       drizzle-orm:
         specifier: ^0.30.8
         version: 0.30.8(@cloudflare/workers-types@4.20240405.0)(@libsql/client@0.6.0)
@@ -2079,6 +2082,10 @@ packages:
     dependencies:
       '@tanstack/query-core': 5.29.0
       react: 18.0.0
+    dev: false
+
+  /@tsndr/cloudflare-worker-jwt@2.5.3:
+    resolution: {integrity: sha512-zbdvjRG86y/ObiBgTJrzBC39t2FcaeGwB6AV7VO4LvHKJNyZvLYRbKT68eaoJhnJldyHhs7yZ69neRVdUd9knA==}
     dev: false
 
   /@types/estree@1.0.5:

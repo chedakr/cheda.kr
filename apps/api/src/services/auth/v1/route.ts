@@ -1,6 +1,8 @@
-import { Hono } from 'hono';
+import { Hono, MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
+import { HTTPException } from 'hono/http-exception';
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
+import jwt from '@tsndr/cloudflare-worker-jwt';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { Env } from '@/typings';
@@ -48,6 +50,20 @@ type NidVerifyResponse = NidApiResponse<{
 	client_id: string;
 }>;
 
+function hexEncode(str: string) {
+	return str
+		.split('')
+		.map(c => c.charCodeAt(0).toString(16).padStart(2, '0'))
+		.join('');
+}
+
+function hexDecode(str: string) {
+	return str
+		.match(/[0-9a-f]{2}/ig)!
+		.map(b => String.fromCharCode(parseInt(b, 16)))
+		.join('');
+}
+
 const collectResponse = async (response?: Response, fallback: string = '') => {
 	if (response == null) {
 		return fallback;
@@ -59,7 +75,6 @@ const collectResponse = async (response?: Response, fallback: string = '') => {
 	}
 	return result || fallback;
 };
-
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -81,24 +96,108 @@ app.use('*', cors({
 	credentials: true,
 }));
 
-app.get('/logout', async (c) => {
+const withPrevUrl: MiddlewareHandler<{
+	Bindings: Env;
+	Variables: {
+		prevUrl: string;
+	};
+}> = async (c, next) => {
 	let prevUrl = 'https://cheda.kr/';
 	try {
 		prevUrl = new URL(c.req.query('prevUrl') ?? c.req.header('Referer') ?? '').toString();
 	} catch (e) {}
 
+	c.set('prevUrl', prevUrl);
+
+	await next();
+};
+
+const withSessionId: MiddlewareHandler<{
+	Bindings: Env,
+	Variables: {
+		prevUrl: string
+	};
+}> = async (c, next) => {
+	const sessionId = getCookie(c, 'session_id');
+	if (!sessionId) throw new HTTPException(401, { message: 'Unauthorized' });
+
+	// NOTE: 검증하지 않기 때문에 액세스 토큰이 유출된 경우 로그아웃 처리 필요
+	const user = (jwt.decode(sessionId) as any).payload.user;
+	const expireAt = new Date(user.expireAt).getTime();
+
+	if (Date.now() < expireAt) {
+		if (c.var.prevUrl) {
+			return c.redirect(c.var.prevUrl);
+		}
+		return await next();
+	}
+
+	const url = new URL('https://nid.naver.com/oauth2.0/token');
+	url.searchParams.append('grant_type', 'refresh_token');
+	url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
+	url.searchParams.append('client_secret', c.env.OAUTH_CLIENT_SECRET_NAVER);
+	url.searchParams.append('refresh_token', user.refreshToken);
+
+	const response = await fetch(url);
+	const result = await response.json() as RefreshTokenResponse;
+
+	const headers = {
+		'Authorization': `Bearer ${result.access_token}`,
+	};
+	const [meResult, verifyResult] = await Promise.all([
+		fetch('https://openapi.naver.com/v1/nid/me', { headers }).then(r => r.json()) as Promise<NidMeResponse>,
+		fetch('https://openapi.naver.com/v1/nid/verify?info=true', { headers }).then(r => r.json()) as Promise<NidVerifyResponse>
+	]);
+
+	const userPatch = {
+		userName: meResult.response.nickname,
+		userImage: meResult.response.profile_image,
+		accessToken: result.access_token,
+		tokenType: result.token_type,
+		expireAt: new Date(verifyResult.response.expire_date),
+		updatedAt: new Date(),
+	};
+
+	const db = drizzle(c.env.DB);
+	await db.update(usersTable)
+		.set(userPatch)
+		.where(eq(usersTable.userId, meResult.response.id));
+
+	const newSessionId = await jwt.sign(
+		{
+			user: {
+				...user,
+				...userPatch,
+			},
+			exp: Math.floor(Date.now() / 1000) + parseInt(result.expires_in),
+		},
+		hexDecode(c.env.JWT_SECRET_KEY),
+		{ algorithm: 'RS256' }
+	);
+
+	setCookie(c, 'session_id', newSessionId, {
+		expires: new Date(Date.now() + parseInt(result.expires_in) * 1000),
+		...c.env.DEV ? {} : {
+			secure: true,
+			domain: '.cheda.kr',
+		},
+	});
+
+	await next();
+};
+
+app.get('/logout', withPrevUrl, async (c) => {
 	const sessionId = getCookie(c, 'session_id');
 	if (!sessionId) {
-		return c.redirect(prevUrl);
+		return c.redirect(c.var.prevUrl);
 	}
 
-	const cache = await caches.open('auth');
-	const matched = await cache.match(new Request(`http://localhost/__auth/${sessionId}`, { method: 'GET' }));
-
-	if (!matched) {
-		return c.redirect(prevUrl);
+	if (!await jwt.verify(sessionId, hexDecode(c.env.JWT_PUBLIC_KEY), { algorithm: 'RS256' })) {
+		deleteCookie(c, 'session_id');
+		return c.redirect(c.var.prevUrl);
 	}
-	const user = JSON.parse(await collectResponse(matched));
+
+	const user = (jwt.decode(sessionId).payload as any).user;
 
 	/*
 	const url = new URL('https://nid.naver.com/oauth2.0/token');
@@ -112,13 +211,10 @@ app.get('/logout', async (c) => {
 	const result = await response.json() as DeleteTokenRespone;
 	*/
 
-	await cache.delete(new Request(`http://localhost/__auth/${sessionId}`, { method: 'GET' }));
-
 	const db = drizzle(c.env.DB);
 	await db.update(usersTable)
 		.set({
 			accessToken: null,
-			refreshToken: null,
 			expireAt: null,
 			updatedAt: new Date(),
 		})
@@ -126,91 +222,11 @@ app.get('/logout', async (c) => {
 
 	deleteCookie(c, 'session_id');
 
-	return c.redirect(prevUrl);
+	return c.redirect(c.var.prevUrl);
 });
 
-app.get('/login', async (c) => {
-	let prevUrl = 'https://cheda.kr/';
-	try {
-		prevUrl = new URL(c.req.query('prevUrl') ?? c.req.header('Referer') ?? '').toString();
-	} catch (e) {}
-
+app.get('/login', withPrevUrl, async (c) => {
 	const cache = await caches.open('auth');
-	const sessionId = getCookie(c, 'session_id');
-	if (sessionId) {
-		const matched = await cache.match(new Request(`http://localhost/__auth/${sessionId}`, { method: 'GET' }));
-		if (matched) {
-			const user = JSON.parse(await collectResponse(matched));
-			const expireAt = new Date(user.expireAt).getTime();
-			if (Date.now() < expireAt) {
-				return c.redirect(prevUrl);
-			}
-			const url = new URL('https://nid.naver.com/oauth2.0/token');
-			url.searchParams.append('grant_type', 'refresh_token');
-			url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
-			url.searchParams.append('client_secret', c.env.OAUTH_CLIENT_SECRET_NAVER);
-			url.searchParams.append('refresh_token', user.refreshToken);
-
-			const response = await fetch(url);
-			const result = await response.json() as RefreshTokenResponse;
-
-			const headers = {
-				'Authorization': `Bearer ${result.access_token}`,
-			};
-			const [me, verify] = await Promise.all([
-				fetch('https://openapi.naver.com/v1/nid/me', { headers }).then(r => r.json()) as Promise<NidMeResponse>,
-				fetch('https://openapi.naver.com/v1/nid/verify?info=true', { headers }).then(r => r.json()) as Promise<NidVerifyResponse>
-			]);
-
-
-			const db = drizzle(c.env.DB);
-
-			await db.update(usersTable)
-				.set({
-					userName: me.response.nickname,
-					userImage: me.response.profile_image,
-					accessToken: result.access_token,
-					tokenType: result.token_type,
-					expireAt: new Date(verify.response.expire_date),
-					updatedAt: new Date(),
-				})
-				.where(eq(usersTable.userId, me.response.id));
-
-			deleteCookie(c, 'session_id');
-
-			const newSessionId = crypto.randomUUID();
-
-			await cache.put(
-				new Request(`http://localhost/__auth/${newSessionId}`, { method: 'GET' }),
-				new Response(JSON.stringify({
-					userId: me.response.id,
-					userName: me.response.nickname,
-					userImage: me.response.profile_image,
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					accessToken: result.access_token,
-					refreshToken: user.refreshToken,
-					tokenType: result.token_type,
-					expireAt: new Date(verify.response.expire_date),
-				}), {
-					headers: {
-						'Cache-Control': `max-age=${result.expires_in}`,
-					},
-				}),
-			);
-
-
-			setCookie(c, 'session_id', newSessionId, {
-				httpOnly: true,
-				expires: new Date(Date.now() + parseInt(result.expires_in) * 1000),
-				...c.env.DEV ? {} : {
-					secure: true,
-					domain: '.cheda.kr',
-				},
-			});
-			return c.redirect(prevUrl);
-		}
-	}
 
 	const prevState = getCookie(c, 'state');
 	if (prevState) {
@@ -227,7 +243,7 @@ app.get('/login', async (c) => {
 
 	await cache.put(
 		new Request(`http://localhost/__auth/${state}`, { method: 'GET' }),
-		new Response(prevUrl, {
+		new Response(c.var.prevUrl, {
 			headers: {
 				'Cache-Control': 'max-age=600',
 			},
@@ -288,7 +304,7 @@ app.get('/callback', async (c) => {
 		'Authorization': `Bearer ${result.access_token}`,
 	};
 
-	const [me, verify] = await Promise.all([
+	const [meResult, verifyResult] = await Promise.all([
 		fetch('https://openapi.naver.com/v1/nid/me', { headers }).then(r => r.json()) as Promise<NidMeResponse>,
 		fetch('https://openapi.naver.com/v1/nid/verify?info=true', { headers }).then(r => r.json()) as Promise<NidVerifyResponse>
 	]);
@@ -296,15 +312,15 @@ app.get('/callback', async (c) => {
 	const db = drizzle(c.env.DB);
 
 	const user = {
-		userId: me.response.id,
-		userName: me.response.nickname,
-		userImage: me.response.profile_image,
+		userId: meResult.response.id,
+		userName: meResult.response.nickname,
+		userImage: meResult.response.profile_image,
 		createdAt: new Date(),
 		updatedAt: new Date(),
 		accessToken: result.access_token,
 		refreshToken: result.refresh_token,
 		tokenType: result.token_type,
-		expireAt: new Date(verify.response.expire_date),
+		expireAt: new Date(verifyResult.response.expire_date),
 	};
 
 	try {
@@ -316,6 +332,7 @@ app.get('/callback', async (c) => {
 				userName: user.userName,
 				userImage: user.userImage,
 				accessToken: user.accessToken,
+				refreshToken: user.refreshToken,
 				tokenType: user.tokenType,
 				expireAt: user.expireAt,
 				updatedAt: user.updatedAt,
@@ -323,18 +340,24 @@ app.get('/callback', async (c) => {
 			.where(eq(usersTable.userId, user.userId));
 	}
 
-	const sessionId = crypto.randomUUID();
-
-	await cache.put(
-		new Request(`http://localhost/__auth/${sessionId}`, { method: 'GET' }),
-		new Response(JSON.stringify(user), {
-			headers: {
-				'Cache-Control': `max-age=${result.expires_in}`,
+	const sessionId = await jwt.sign(
+		{
+			user: {
+				userId: user.userId,
+				userName: user.userName,
+				userImage: user.userImage,
+				accessToken: user.accessToken,
+				tokenType: user.tokenType,
+				expireAt: user.expireAt,
+				updatedAt: user.updatedAt,
 			},
-		}),
+			exp: Math.floor(Date.now() / 1000) + parseInt(result.expires_in),
+		},
+		hexDecode(c.env.JWT_SECRET_KEY),
+		{ algorithm: 'RS256' }
 	);
+
 	setCookie(c, 'session_id', sessionId, {
-		httpOnly: true,
 		expires: new Date(Date.now() + parseInt(result.expires_in) * 1000),
 		...c.env.DEV ? {} : {
 			secure: true,
@@ -345,19 +368,22 @@ app.get('/callback', async (c) => {
 	return c.redirect(prevUrl);
 });
 
-app.get('/me', async (c) => {
+app.get('/me', withSessionId, async (c) => {
 	const sessionId = getCookie(c, 'session_id');
 	if (!sessionId) {
 		return c.json({ message: 'Unauthorized' }, 401);
 	}
 
-	const cache = await caches.open('auth');
-	const matched = cache.match(new Request(`http://localhost/__auth/${sessionId}`, { method: 'GET' }));
-
-	if (!matched) {
+	if (!await jwt.verify(
+		sessionId,
+		hexDecode(c.env.JWT_PUBLIC_KEY),
+		{ algorithm: 'RS256' },
+	)) {
 		return c.json({ message: 'Unauthorized' }, 401);
 	}
-	const user = JSON.parse(await collectResponse(await matched));
+
+	const token = jwt.decode(sessionId) as any;
+	const user = token.payload.user;
 
 	const response = fetch('https://openapi.naver.com/v1/nid/me', {
 		headers: {

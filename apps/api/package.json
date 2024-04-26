@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@libsql/client": "^0.6.0",
+    "@tsndr/cloudflare-worker-jwt": "^2.5.3",
     "drizzle-orm": "^0.30.8",
     "hono": "^4.2.4"
   }
