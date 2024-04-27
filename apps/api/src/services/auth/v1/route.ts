@@ -58,9 +58,12 @@ type SessionPayload = PrefixRoot<typeof JWT_PREFIX, {
 		userName: string;
 		userImage: string;
 		accessToken: string;
-		tokenType: string;
-		expireAt: Date;
-		updatedAt: Date;
+	};
+}>;
+
+type SecuredSessionPayload = PrefixRoot<typeof JWT_PREFIX, {
+	user: {
+		refreshToken: string;
 	};
 }>;
 
@@ -110,7 +113,7 @@ const withPrevUrl: MiddlewareHandler<{
 
 		const stateCookie = getCookie(c, 'state');
 		if (stateCookie) {
-			const jwt = await jose.compactDecrypt(getCookie(c, 'state')!, c.var.privateKey);
+			const jwt = await jose.compactDecrypt(stateCookie, c.var.privateKey);
 			const payload = await verifyToken<StatePayload>(c, jwt.plaintext);
 
 			prevUrl = payload['http:cheda.kr/state'].url;
@@ -176,18 +179,23 @@ const withSession: MiddlewareHandler<{
 
 	try {
 		const sessionId = getCookie(c, 'session_id');
-		if (!sessionId) throw new InvalidToken();
+		const sessionSid = getCookie(c, 'session_sid');
+		if (!sessionId || !sessionSid) throw new InvalidToken();
 
 		const payload = await verifyToken<SessionPayload>(c, sessionId);
-		const user = payload['http:cheda.kr/user'];
+		let user = payload['http:cheda.kr/user'];
 
 		const threshold = 1000 * 60 * 10;
-		if (new Date(user.expireAt).getTime() <= Date.now() + threshold) {
+		if (new Date(payload.exp! * 1000).getTime() <= Date.now() + threshold) {
+			const securedToken = await decryptToken(c, sessionSid);
+			const securedPayload = await verifyToken<SecuredSessionPayload>(c, securedToken);
+			const { refreshToken } = securedPayload['http:cheda.kr/user'];
+
 			const url = new URL('https://nid.naver.com/oauth2.0/token');
 			url.searchParams.append('grant_type', 'refresh_token');
 			url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
 			url.searchParams.append('client_secret', c.env.OAUTH_CLIENT_SECRET_NAVER);
-			url.searchParams.append('refresh_token', user.refreshToken);
+			url.searchParams.append('refresh_token', refreshToken);
 
 			const response = await fetch(url);
 			const result = await response.json() as RefreshTokenResponse;
@@ -201,24 +209,23 @@ const withSession: MiddlewareHandler<{
 				fetch('https://openapi.naver.com/v1/nid/verify?info=true', { headers }).then(r => r.json()) as Promise<NidVerifyResponse>
 			]);
 
-			const userPatch = {
+			user = {
+				userId: meResult.response.id,
 				userName: meResult.response.nickname,
 				userImage: meResult.response.profile_image,
 				accessToken: result.access_token,
-				tokenType: result.token_type,
-				expireAt: new Date(verifyResult.response.expire_date),
-				updatedAt: new Date(),
 			};
+			const expires = new Date(verifyResult.response.expire_date);
 
-			const db = drizzle(c.env.DB);
-			await db.update(usersTable)
-				.set(userPatch)
-				.where(eq(usersTable.userId, meResult.response.id));
+			const session = await signToken(
+				c,
+				prefixRoot(JWT_PREFIX, {
+					user,
+				}) satisfies SessionPayload,
+				expires
+			);
 
-		       	const expires = new Date(Date.now() + parseInt(result.expires_in) * 1000);
-			const jwt = await signToken(c, { ...user, ...userPatch }, expires);
-
-			setCookie(c, 'session_id', jwt, {
+			setCookie(c, 'session_id', session, {
 				expires,
 				...c.env.DEV ? {} : {
 					secure: true,
@@ -226,7 +233,7 @@ const withSession: MiddlewareHandler<{
 				},
 			});
 		}
-		c.set('session', { user: payload['http:cheda.kr/user'] });
+		c.set('session', { user });
 	} catch (e) {
 		if (e instanceof InvalidToken) {
 			deleteCookie(c, 'session_id');
@@ -263,10 +270,6 @@ app.get('/logout', withPrevUrl, async (c) => {
 	if (!sessionId) {
 		return c.redirect(c.var.prevUrl);
 	}
-
-	const payload = await verifyToken<SessionPayload>(c, sessionId);
-	const user = payload['http:cheda.kr/user'];
-
 	/*
 	const url = new URL('https://nid.naver.com/oauth2.0/token');
 	url.searchParams.append('grant_type', 'delete');
@@ -278,15 +281,6 @@ app.get('/logout', withPrevUrl, async (c) => {
 	const response = await fetch(url);
 	const result = await response.json() as DeleteTokenRespone;
 	*/
-
-	const db = drizzle(c.env.DB);
-	await db.update(usersTable)
-		.set({
-			accessToken: null,
-			expireAt: null,
-			updatedAt: new Date(),
-		})
-		.where(eq(usersTable.userId, user.userId));
 
 	deleteCookie(c, 'session_id');
 
@@ -377,52 +371,75 @@ app.get('/callback', async (c) => {
 		fetch('https://openapi.naver.com/v1/nid/verify?info=true', { headers }).then(r => r.json()) as Promise<NidVerifyResponse>
 	]);
 
-	const db = drizzle(c.env.DB);
-
+	const now = new Date();
 	const user = {
 		userId: meResult.response.id,
 		userName: meResult.response.nickname,
 		userImage: meResult.response.profile_image,
-		createdAt: new Date(),
-		updatedAt: new Date(),
+		createdAt: now,
+		updatedAt: now,
 		accessToken: result.access_token,
 		refreshToken: result.refresh_token,
 		tokenType: result.token_type,
-		expireAt: new Date(verifyResult.response.expire_date),
 	};
+	const expires = new Date(verifyResult.response.expire_date);
 
+	const db = drizzle(c.env.DB);
 	try {
 		await db.insert(usersTable)
-			.values(user);
+			.values({
+				userId: meResult.response.id,
+				userName: meResult.response.nickname,
+				userImage: meResult.response.profile_image,
+				createdAt: now,
+				updatedAt: now,
+			});
 	} catch (e) {
 		await db.update(usersTable)
 			.set({
-				userName: user.userName,
-				userImage: user.userImage,
-				accessToken: user.accessToken,
-				refreshToken: user.refreshToken,
-				tokenType: user.tokenType,
-				expireAt: user.expireAt,
-				updatedAt: user.updatedAt,
+				userName: meResult.response.nickname,
+				userImage: meResult.response.profile_image,
+				updatedAt: now,
 			})
 			.where(eq(usersTable.userId, user.userId));
 	}
 
-	const payload = prefixRoot(JWT_PREFIX, {
-		user: {
-			userId: user.userId,
-			userName: user.userName,
-			userImage: user.userImage,
-			accessToken: user.accessToken,
-			expireAt: user.expireAt,
-			updatedAt: user.updatedAt,
+	const session = await signToken(
+		c,
+		prefixRoot(JWT_PREFIX, {
+			user: {
+				userId: user.userId,
+				userName: user.userName,
+				userImage: user.userImage,
+				accessToken: user.accessToken,
+			},
+		}) satisfies SessionPayload,
+		expires
+	);
+
+	const weekLater = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+	let securedSession = await signToken(
+		c,
+		prefixRoot(JWT_PREFIX, {
+			user: {
+				refreshToken: user.refreshToken,
+			},
+		}) satisfies SecuredSessionPayload,
+		weekLater,
+	);
+	securedSession = await encryptToken(c, securedSession);
+
+	setCookie(c, 'session_id', session, {
+		expires,
+		...c.env.DEV ? {} : {
+			secure: true,
+			domain: '.cheda.kr',
 		},
 	});
 
-	const jwt = await signToken(c, payload, user.expireAt);
-
-	setCookie(c, 'session_id', jwt, {
-		expires: new Date(Date.now() + parseInt(result.expires_in) * 1000),
+	setCookie(c, 'session_sid', securedSession, {
+		httpOnly: true,
+		expires,
 		...c.env.DEV ? {} : {
 			secure: true,
 			domain: '.cheda.kr',

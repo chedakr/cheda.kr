@@ -7,10 +7,6 @@ export const users = sqliteTable('users', {
 	userImage: text('user_image'),
 	createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 	updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-	accessToken: text('access_token'),
-	refreshToken: text('refresh_token'),
-	tokenType: text('token_type'),
-	expireAt: integer('expire_at', { mode: 'timestamp_ms' }),
 }, (table) => {
 	return {
 		idxUserId: uniqueIndex('idx_users_user_id').on(table.userId),
