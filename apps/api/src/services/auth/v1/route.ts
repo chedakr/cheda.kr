@@ -283,9 +283,25 @@ app.get('/logout', withPrevUrl, async (c) => {
 	const result = await response.json() as DeleteTokenRespone;
 	*/
 
-	deleteSessionCookies(c);
+	try {
+		// access token 갱신 요청으로 이전 토큰을 무효화
+		const sessionSid = getCookie(c, 'session_sid')!;
+		const securedToken = await decryptToken(c, sessionSid);
+		const securedPayload = await verifyToken<SecuredSessionPayload>(c, securedToken);
+		const { refreshToken } = securedPayload['http:cheda.kr/user'];
 
-	return c.redirect(c.var.prevUrl);
+		const url = new URL('https://nid.naver.com/oauth2.0/token');
+		url.searchParams.append('grant_type', 'refresh_token');
+		url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
+		url.searchParams.append('client_secret', c.env.OAUTH_CLIENT_SECRET_NAVER);
+		url.searchParams.append('refresh_token', refreshToken);
+
+		const response = await fetch(url);
+		await response.json() as RefreshTokenResponse;
+	} finally {
+		deleteSessionCookies(c);
+		return c.redirect(c.var.prevUrl);
+	}
 });
 
 app.get('/login', withPrevUrl, async (c) => {
@@ -453,13 +469,20 @@ app.get('/callback', async (c) => {
 app.get('/me', withSession, async (c) => {
 	const { user } = c.var.session;
 
-	const response = fetch('https://openapi.naver.com/v1/nid/me', {
+	const response = await fetch('https://openapi.naver.com/v1/nid/me', {
 		headers: {
 			'Authorization': `Bearer ${user.accessToken}`,
 		},
 	});
 
-	const result = await response.then(r => r.json()) as NidMeResponse;
+	if (!response.ok) {
+		if (response.status === 401) {
+			throw new HTTPException(401, { message: 'Unauthorized' });
+		}
+		throw new HTTPException(500, { message: 'Internal Server Error' });
+	}
+
+	const result = await response.json() as NidMeResponse;
 
 	return c.json({
 		name: result.response.nickname,
