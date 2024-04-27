@@ -50,13 +50,38 @@ type NidVerifyResponse = NidApiResponse<{
 	client_id: string;
 }>;
 
+const JWT_PREFIX = 'http:cheda.kr/';
+
+type SessionPayload = PrefixRoot<typeof JWT_PREFIX, {
+	user: {
+		userId: string;
+		userName: string;
+		userImage: string;
+		accessToken: string;
+		tokenType: string;
+		expireAt: Date;
+		updatedAt: Date;
+	};
+}>;
+
+type StatePayload = PrefixRoot<typeof JWT_PREFIX, {
+	state: {
+		id: string;
+		url: string;
+	};
+}>;
+
+type PrefixRoot<TPrefix extends string, TValue extends { [k: string]: any }> = {
+	[k in keyof TValue as k extends string ? `${TPrefix}${k}` : never]: TValue[k];
+};
+
 function prefixRoot<
 	const TPrefix extends string,
 	const TValue extends { [k: string]: any }
 >(prefix: TPrefix, value: TValue) {
 	return Object.fromEntries(
 		Object.entries(value).map(([k, v]) => [`${prefix}${k}`, v])
-	) as { [k in keyof TValue as k extends string ? `${TPrefix}${k}` : never]: TValue[keyof TValue] };
+	) as PrefixRoot<TPrefix, TValue>;
 }
 
 const collectResponse = async (response?: Response, fallback: string = '') => {
@@ -106,9 +131,9 @@ const withPrevUrl: MiddlewareHandler<{
 		const stateCookie = getCookie(c, 'state');
 		if (stateCookie) {
 			const jwt = await jose.compactDecrypt(getCookie(c, 'state')!, c.var.privateKey);
-			const { payload } = await jose.jwtVerify<{ id: string; url: string }>(jwt.plaintext, c.var.publicKey);
+			const { payload } = await jose.jwtVerify<StatePayload>(jwt.plaintext, c.var.publicKey);
 
-			prevUrl = payload.url;
+			prevUrl = payload['http:cheda.kr/state'].url;
 
 			deleteCookie(c, 'state');
 		}
@@ -163,8 +188,8 @@ const withSessionId: MiddlewareHandler<{
 		const sessionId = getCookie(c, 'session_id');
 		if (!sessionId) throw new InvalidToken();
 
-		const { payload } = await jose.jwtVerify(sessionId, c.var.publicKey);
-		const user = payload['http:cheda.kr/user'] as any;
+		const { payload } = await jose.jwtVerify<SessionPayload>(sessionId, c.var.publicKey);
+		const user = payload['http:cheda.kr/user'];
 
 		const threshold = 1000 * 60 * 10;
 		if (new Date(user.expireAt).getTime() <= Date.now() + threshold) {
@@ -230,8 +255,8 @@ app.get('/logout', withPublicKey, withPrevUrl, async (c) => {
 		return c.redirect(c.var.prevUrl);
 	}
 
-	const { payload } = await jose.jwtVerify(sessionId, c.var.publicKey);
-	const user = payload['http:cheda.kr/user'] as any;
+	const { payload } = await jose.jwtVerify<SessionPayload>(sessionId, c.var.publicKey);
+	const user = payload['http:cheda.kr/user'];
 
 	/*
 	const url = new URL('https://nid.naver.com/oauth2.0/token');
@@ -265,11 +290,13 @@ app.get('/login', withPrivateKey, withPublicKey, withPrevUrl, async (c) => {
 	url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
 	url.searchParams.append('redirect_uri', `${c.env.API_ORIGIN}/services/auth/v1/callback`);
 
-	const state = {
-		id: crypto.randomUUID(),
-		url: c.var.prevUrl,
-	};
-	url.searchParams.append('state', state.id);
+	const state: StatePayload = prefixRoot(JWT_PREFIX, {
+		state: {
+			id: crypto.randomUUID(),
+			url: c.var.prevUrl,
+		},
+	});
+	url.searchParams.append('state', state['http:cheda.kr/state'].id);
 
 	const expires = new Date(Date.now() + 1000 * 60 * 5);
 
@@ -296,14 +323,14 @@ app.get('/login', withPrivateKey, withPublicKey, withPrevUrl, async (c) => {
 });
 
 app.get('/callback', withPrivateKey, withPublicKey, async (c) => {
-	let state: { id: string; url: string } | null = null;
+	let state: StatePayload | undefined;
 	try {
 		const cookie = getCookie(c, 'state')!;
 
 		const privateKey = await jose.importPKCS8(u8ToString(jose.base64url.decode(c.env.JWT_SECRET_KEY)), 'ECDH-ES');
 		const jwt = await jose.compactDecrypt(cookie, privateKey);
 
-		const { payload } = await jose.jwtVerify<{ id: string; url: string }>(jwt.plaintext, c.var.publicKey);
+		const { payload } = await jose.jwtVerify<StatePayload>(jwt.plaintext, c.var.publicKey);
 		state = payload;
 	} catch (e) {
 		console.error(e);
@@ -318,10 +345,12 @@ app.get('/callback', withPrivateKey, withPublicKey, async (c) => {
 
 	const code = c.req.query('code');
 	if (!code) {
-		return c.redirect(state.url);
+		return c.redirect(state['http:cheda.kr/state'].url);
 	}
 
-	if (!state.id || state.id !== c.req.query('state')) {
+	const { id, url: prevUrl } = state['http:cheda.kr/state'];
+
+	if (!id || id !== c.req.query('state')) {
 		return c.json({ message: 'Invalid request' }, 400);
 	}
 
@@ -334,7 +363,7 @@ app.get('/callback', withPrivateKey, withPublicKey, async (c) => {
 	const response = await fetch(url);
 
 	if (!response.ok) {
-		return c.redirect(state.url);
+		return c.redirect(prevUrl);
 	}
 	const result = await response.json() as AccessTokenResponse;
 
@@ -378,7 +407,7 @@ app.get('/callback', withPrivateKey, withPublicKey, async (c) => {
 			.where(eq(usersTable.userId, user.userId));
 	}
 
-	const payload = prefixRoot('http:cheda.kr/', {
+	const payload = prefixRoot(JWT_PREFIX, {
 		user: {
 			userId: user.userId,
 			userName: user.userName,
@@ -400,7 +429,8 @@ app.get('/callback', withPrivateKey, withPublicKey, async (c) => {
 			domain: '.cheda.kr',
 		},
 	});
-	return c.redirect(state.url);
+
+	return c.redirect(prevUrl);
 });
 
 app.get('/me', withPublicKey, withSessionId, async (c) => {
@@ -409,8 +439,8 @@ app.get('/me', withPublicKey, withSessionId, async (c) => {
 		return c.json({ message: 'Unauthorized' }, 401);
 	}
 
-	const { payload } = await jose.jwtVerify(sessionId, c.var.publicKey);
-	const user = payload['http:cheda.kr/user'] as any;
+	const { payload } = await jose.jwtVerify<SessionPayload>(sessionId, c.var.publicKey);
+	const user = payload['http:cheda.kr/user'];
 
 	const response = fetch('https://openapi.naver.com/v1/nid/me', {
 		headers: {
