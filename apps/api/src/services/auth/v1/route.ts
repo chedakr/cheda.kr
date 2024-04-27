@@ -1,4 +1,4 @@
-import { Hono, MiddlewareHandler } from 'hono';
+import { Hono, MiddlewareHandler, Context } from 'hono';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
@@ -96,26 +96,6 @@ const collectResponse = async (response?: Response, fallback: string = '') => {
 	return result || fallback;
 };
 
-const app = new Hono<{ Bindings: Env }>();
-
-app.use('*', cors({
-	origin: (origin, c) => {
-		if (c.env.DEV) {
-			return origin;
-		}
-
-		try {
-			const originUrl = new URL(origin);
-			if (originUrl.hostname === 'cheda.kr' || originUrl.hostname.endsWith('.cheda.kr')) {
-				return origin;
-			}
-		} catch (e) {}
-
-		return 'https://cheda.kr';
-	},
-	credentials: true,
-}));
-
 const withPrevUrl: MiddlewareHandler<{
 	Bindings: Env;
 	Variables: {
@@ -131,7 +111,7 @@ const withPrevUrl: MiddlewareHandler<{
 		const stateCookie = getCookie(c, 'state');
 		if (stateCookie) {
 			const jwt = await jose.compactDecrypt(getCookie(c, 'state')!, c.var.privateKey);
-			const { payload } = await jose.jwtVerify<StatePayload>(jwt.plaintext, c.var.publicKey);
+			const payload = await verifyToken<StatePayload>(c, jwt.plaintext);
 
 			prevUrl = payload['http:cheda.kr/state'].url;
 
@@ -150,36 +130,46 @@ const u8ToString = (arr: Uint8Array) => {
 	return Array.from(arr).map(b => String.fromCharCode(b)).join('');
 };
 
-const withPrivateKey: MiddlewareHandler<{
-	Bindings: Env;
-	Variables: {
-		privateKey: jose.KeyLike;
-	};
-}> = async (c, next) => {
-	const privateKey = await jose.importPKCS8(u8ToString(jose.base64url.decode(c.env.JWT_SECRET_KEY)), 'ES256');
-	c.set('privateKey', privateKey);
-
-	await next();
+const verifyToken = async <T extends Record<string, any>, C extends Context = Context>(context: C, token: string | Uint8Array) => {
+	const publicKey = await jose.importSPKI(u8ToString(jose.base64url.decode(context.env.JWT_PUBLIC_KEY)), 'ES256');
+	const { payload } = await jose.jwtVerify<T>(token, publicKey);
+	return payload;
 };
 
-const withPublicKey: MiddlewareHandler<{
-	Bindings: Env;
-	Variables: {
-		publicKey: jose.KeyLike;
-	};
-}> = async (c, next) => {
-	const publicKey = await jose.importSPKI(u8ToString(jose.base64url.decode(c.env.JWT_PUBLIC_KEY)), 'ES256');
-	c.set('publicKey', publicKey);
+const signToken = async <T extends Record<string, any>, C extends Context = Context>(context: C, payload: T, expires: string | number | Date) => {
+	const privateKey = await jose.importPKCS8(u8ToString(jose.base64url.decode(context.env.JWT_SECRET_KEY)), 'ES256');
+	const jwt = await new jose.SignJWT(payload)
+		.setProtectedHeader({ alg: 'ES256' })
+		.setExpirationTime(expires)
+		.sign(privateKey);
 
-	await next();
+	return jwt;
 };
 
-const withSessionId: MiddlewareHandler<{
+const encryptToken = async <C extends Context = Context>(context: C, token: string) => {
+	const publicKey = await jose.importSPKI(u8ToString(jose.base64url.decode(context.env.JWT_PUBLIC_KEY)), 'ECDH-ES');
+	const jwe = await new jose.CompactEncrypt(new TextEncoder().encode(token))
+		.setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM' })
+		.encrypt(publicKey);
+
+	return jwe;
+};
+
+const decryptToken = async <C extends Context = Context>(context: C, token: string) => {
+	const privateKey = await jose.importPKCS8(u8ToString(jose.base64url.decode(context.env.JWT_SECRET_KEY)), 'ECDH-ES');
+	const result = await jose.compactDecrypt(token, privateKey);
+	return result.plaintext;
+};
+
+const withSession: MiddlewareHandler<{
 	Bindings: Env,
 	Variables: {
 		publicKey: jose.KeyLike;
 		privateKey: jose.KeyLike;
-		prevUrl: string
+		prevUrl: string;
+		session: {
+			user: SessionPayload['http:cheda.kr/user'];
+		};
 	};
 }> = async (c, next) => {
 	class InvalidToken extends Error {}
@@ -188,7 +178,7 @@ const withSessionId: MiddlewareHandler<{
 		const sessionId = getCookie(c, 'session_id');
 		if (!sessionId) throw new InvalidToken();
 
-		const { payload } = await jose.jwtVerify<SessionPayload>(sessionId, c.var.publicKey);
+		const payload = await verifyToken<SessionPayload>(c, sessionId);
 		const user = payload['http:cheda.kr/user'];
 
 		const threshold = 1000 * 60 * 10;
@@ -226,10 +216,7 @@ const withSessionId: MiddlewareHandler<{
 				.where(eq(usersTable.userId, meResult.response.id));
 
 		       	const expires = new Date(Date.now() + parseInt(result.expires_in) * 1000);
-		       	const jwt = await new jose.SignJWT({ ...user, ...userPatch })
-				.setProtectedHeader({ alg: 'ES256' })
-				.setExpirationTime(expires)
-				.sign(c.var.privateKey);
+			const jwt = await signToken(c, { ...user, ...userPatch }, expires);
 
 			setCookie(c, 'session_id', jwt, {
 				expires,
@@ -239,6 +226,7 @@ const withSessionId: MiddlewareHandler<{
 				},
 			});
 		}
+		c.set('session', { user: payload['http:cheda.kr/user'] });
 	} catch (e) {
 		if (e instanceof InvalidToken) {
 			deleteCookie(c, 'session_id');
@@ -246,16 +234,37 @@ const withSessionId: MiddlewareHandler<{
 		}
 		throw e;
 	}
+
 	await next();
 };
 
-app.get('/logout', withPublicKey, withPrevUrl, async (c) => {
+const app = new Hono<{ Bindings: Env }>();
+
+app.use('*', cors({
+	origin: (origin, c) => {
+		if (c.env.DEV) {
+			return origin;
+		}
+
+		try {
+			const originUrl = new URL(origin);
+			if (originUrl.hostname === 'cheda.kr' || originUrl.hostname.endsWith('.cheda.kr')) {
+				return origin;
+			}
+		} catch (e) {}
+
+		return 'https://cheda.kr';
+	},
+	credentials: true,
+}));
+
+app.get('/logout', withPrevUrl, async (c) => {
 	const sessionId = getCookie(c, 'session_id');
 	if (!sessionId) {
 		return c.redirect(c.var.prevUrl);
 	}
 
-	const { payload } = await jose.jwtVerify<SessionPayload>(sessionId, c.var.publicKey);
+	const payload = await verifyToken<SessionPayload>(c, sessionId);
 	const user = payload['http:cheda.kr/user'];
 
 	/*
@@ -284,7 +293,7 @@ app.get('/logout', withPublicKey, withPrevUrl, async (c) => {
 	return c.redirect(c.var.prevUrl);
 });
 
-app.get('/login', withPrivateKey, withPublicKey, withPrevUrl, async (c) => {
+app.get('/login', withPrevUrl, async (c) => {
 	const url = new URL(`https://nid.naver.com/oauth2.0/authorize`);
 	url.searchParams.append('response_type', 'code');
 	url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
@@ -300,15 +309,8 @@ app.get('/login', withPrivateKey, withPublicKey, withPrevUrl, async (c) => {
 
 	const expires = new Date(Date.now() + 1000 * 60 * 5);
 
-	const jwt = await new jose.SignJWT(state)
-		.setProtectedHeader({ alg: 'ES256' })
-		.setExpirationTime(expires)
-		.sign(c.var.privateKey);
-
-	const publicKey = await jose.importSPKI(u8ToString(jose.base64url.decode(c.env.JWT_PUBLIC_KEY)), 'ECDH-ES');
-	const jwe = await new jose.CompactEncrypt(new TextEncoder().encode(jwt))
-		.setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM' })
-		.encrypt(publicKey);
+	const jwt = await signToken(c, state, expires);
+	const jwe = await encryptToken(c, jwt);
 
 	setCookie(c, 'state', jwe, {
 		httpOnly: true,
@@ -322,15 +324,14 @@ app.get('/login', withPrivateKey, withPublicKey, withPrevUrl, async (c) => {
 	return c.redirect(url.toString());
 });
 
-app.get('/callback', withPrivateKey, withPublicKey, async (c) => {
+app.get('/callback', async (c) => {
 	let state: StatePayload | undefined;
 	try {
 		const cookie = getCookie(c, 'state')!;
 
-		const privateKey = await jose.importPKCS8(u8ToString(jose.base64url.decode(c.env.JWT_SECRET_KEY)), 'ECDH-ES');
-		const jwt = await jose.compactDecrypt(cookie, privateKey);
+		const jwt = await decryptToken(c, cookie);
+		const payload = await verifyToken<StatePayload>(c, jwt);
 
-		const { payload } = await jose.jwtVerify<StatePayload>(jwt.plaintext, c.var.publicKey);
 		state = payload;
 	} catch (e) {
 		console.error(e);
@@ -417,10 +418,8 @@ app.get('/callback', withPrivateKey, withPublicKey, async (c) => {
 			updatedAt: user.updatedAt,
 		},
 	});
-	const jwt = await new jose.SignJWT({ ...payload })
-		.setProtectedHeader({ alg: 'ES256' })
-		.setExpirationTime(user.expireAt)
-		.sign(c.var.privateKey);
+
+	const jwt = await signToken(c, payload, user.expireAt);
 
 	setCookie(c, 'session_id', jwt, {
 		expires: new Date(Date.now() + parseInt(result.expires_in) * 1000),
@@ -433,14 +432,8 @@ app.get('/callback', withPrivateKey, withPublicKey, async (c) => {
 	return c.redirect(prevUrl);
 });
 
-app.get('/me', withPublicKey, withSessionId, async (c) => {
-	const sessionId = getCookie(c, 'session_id');
-	if (!sessionId) {
-		return c.json({ message: 'Unauthorized' }, 401);
-	}
-
-	const { payload } = await jose.jwtVerify<SessionPayload>(sessionId, c.var.publicKey);
-	const user = payload['http:cheda.kr/user'];
+app.get('/me', withSession, async (c) => {
+	const { user } = c.var.session;
 
 	const response = fetch('https://openapi.naver.com/v1/nid/me', {
 		headers: {
