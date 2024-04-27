@@ -266,10 +266,6 @@ app.use('*', cors({
 }));
 
 app.get('/logout', withPrevUrl, async (c) => {
-	const sessionId = getCookie(c, 'session_id');
-	if (!sessionId) {
-		return c.redirect(c.var.prevUrl);
-	}
 	/*
 	const url = new URL('https://nid.naver.com/oauth2.0/token');
 	url.searchParams.append('grant_type', 'delete');
@@ -283,6 +279,7 @@ app.get('/logout', withPrevUrl, async (c) => {
 	*/
 
 	deleteCookie(c, 'session_id');
+	deleteCookie(c, 'session_sid');
 
 	return c.redirect(c.var.prevUrl);
 });
