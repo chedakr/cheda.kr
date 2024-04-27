@@ -131,7 +131,7 @@ const withPrivateKey: MiddlewareHandler<{
 		privateKey: jose.KeyLike;
 	};
 }> = async (c, next) => {
-	const privateKey = await jose.importPKCS8(u8ToString(jose.base64url.decode(c.env.JWT_SECRET_KEY)), 'RS256');
+	const privateKey = await jose.importPKCS8(u8ToString(jose.base64url.decode(c.env.JWT_SECRET_KEY)), 'ES256');
 	c.set('privateKey', privateKey);
 
 	await next();
@@ -143,7 +143,7 @@ const withPublicKey: MiddlewareHandler<{
 		publicKey: jose.KeyLike;
 	};
 }> = async (c, next) => {
-	const publicKey = await jose.importSPKI(u8ToString(jose.base64url.decode(c.env.JWT_PUBLIC_KEY)), 'RS256');
+	const publicKey = await jose.importSPKI(u8ToString(jose.base64url.decode(c.env.JWT_PUBLIC_KEY)), 'ES256');
 	c.set('publicKey', publicKey);
 
 	await next();
@@ -202,7 +202,7 @@ const withSessionId: MiddlewareHandler<{
 
 		       	const expires = new Date(Date.now() + parseInt(result.expires_in) * 1000);
 		       	const jwt = await new jose.SignJWT({ ...user, ...userPatch })
-				.setProtectedHeader({ alg: 'RS256' })
+				.setProtectedHeader({ alg: 'ES256' })
 				.setExpirationTime(expires)
 				.sign(c.var.privateKey);
 
@@ -274,13 +274,13 @@ app.get('/login', withPrivateKey, withPublicKey, withPrevUrl, async (c) => {
 	const expires = new Date(Date.now() + 1000 * 60 * 5);
 
 	const jwt = await new jose.SignJWT(state)
-		.setProtectedHeader({ alg: 'RS256' })
+		.setProtectedHeader({ alg: 'ES256' })
 		.setExpirationTime(expires)
 		.sign(c.var.privateKey);
 
-	const publicKey = await jose.importSPKI(u8ToString(jose.base64url.decode(c.env.JWT_PUBLIC_KEY)), 'RSA-OAEP-256');
+	const publicKey = await jose.importSPKI(u8ToString(jose.base64url.decode(c.env.JWT_PUBLIC_KEY)), 'ECDH-ES');
 	const jwe = await new jose.CompactEncrypt(new TextEncoder().encode(jwt))
-		.setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
+		.setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM' })
 		.encrypt(publicKey);
 
 	setCookie(c, 'state', jwe, {
@@ -300,7 +300,7 @@ app.get('/callback', withPrivateKey, withPublicKey, async (c) => {
 	try {
 		const cookie = getCookie(c, 'state')!;
 
-		const privateKey = await jose.importPKCS8(u8ToString(jose.base64url.decode(c.env.JWT_SECRET_KEY)), 'RSA-OAEP-256');
+		const privateKey = await jose.importPKCS8(u8ToString(jose.base64url.decode(c.env.JWT_SECRET_KEY)), 'ECDH-ES');
 		const jwt = await jose.compactDecrypt(cookie, privateKey);
 
 		const { payload } = await jose.jwtVerify<{ id: string; url: string }>(jwt.plaintext, c.var.publicKey);
@@ -389,7 +389,7 @@ app.get('/callback', withPrivateKey, withPublicKey, async (c) => {
 		},
 	});
 	const jwt = await new jose.SignJWT({ ...payload })
-		.setProtectedHeader({ alg: 'RS256' })
+		.setProtectedHeader({ alg: 'ES256' })
 		.setExpirationTime(user.expireAt)
 		.sign(c.var.privateKey);
 
