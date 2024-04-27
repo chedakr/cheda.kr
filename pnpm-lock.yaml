@@ -17,15 +17,15 @@ importers:
       '@libsql/client':
         specifier: ^0.6.0
         version: 0.6.0
-      '@tsndr/cloudflare-worker-jwt':
-        specifier: ^2.5.3
-        version: 2.5.3
       drizzle-orm:
         specifier: ^0.30.8
         version: 0.30.8(@cloudflare/workers-types@4.20240405.0)(@libsql/client@0.6.0)
       hono:
         specifier: ^4.2.4
         version: 4.2.4
+      jose:
+        specifier: ^5.2.4
+        version: 5.2.4
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.1.0
@@ -2082,10 +2082,6 @@ packages:
     dependencies:
       '@tanstack/query-core': 5.29.0
       react: 18.0.0
-    dev: false
-
-  /@tsndr/cloudflare-worker-jwt@2.5.3:
-    resolution: {integrity: sha512-zbdvjRG86y/ObiBgTJrzBC39t2FcaeGwB6AV7VO4LvHKJNyZvLYRbKT68eaoJhnJldyHhs7yZ69neRVdUd9knA==}
     dev: false
 
   /@types/estree@1.0.5:
@@ -4311,6 +4307,10 @@ packages:
   /jiti@1.21.0:
     resolution: {integrity: sha512-gFqAIbuKyyso/3G2qhiO2OM6shY6EPP/R0+mkDbyspxKazh8BXDC5FiFsUjlczgdNz/vfra0da2y+aHrusLG/Q==}
     hasBin: true
+
+  /jose@5.2.4:
+    resolution: {integrity: sha512-6ScbIk2WWCeXkmzF6bRPmEuaqy1m8SbsRFMa/FLrSCkGIhj8OLVG/IH+XHVmNMx/KUo8cVWEE6oKR4dJ+S0Rkg==}
+    dev: false
 
   /js-base64@3.7.7:
     resolution: {integrity: sha512-7rCnleh0z2CkXhH67J8K1Ytz0b2Y+yxTPL+/KOJoa20hfnVQ/3/T6W/KflYI4bRHRagNeXeU2bkNGI3v1oS/lw==}
