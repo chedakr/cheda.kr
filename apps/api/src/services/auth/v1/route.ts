@@ -164,6 +164,11 @@ const decryptToken = async <C extends Context = Context>(context: C, token: stri
 	return result.plaintext;
 };
 
+const deleteSessionCookies = (c: Context) => {
+	deleteCookie(c, 'session_id');
+	deleteCookie(c, 'session_sid');
+};
+
 const withSession: MiddlewareHandler<{
 	Bindings: Env,
 	Variables: {
@@ -236,7 +241,7 @@ const withSession: MiddlewareHandler<{
 		c.set('session', { user });
 	} catch (e) {
 		if (e instanceof InvalidToken) {
-			deleteCookie(c, 'session_id');
+			deleteSessionCookies(c);
 			return c.json({ message: 'Unauthorized' }, 401);
 		}
 		throw e;
@@ -278,8 +283,7 @@ app.get('/logout', withPrevUrl, async (c) => {
 	const result = await response.json() as DeleteTokenRespone;
 	*/
 
-	deleteCookie(c, 'session_id');
-	deleteCookie(c, 'session_sid');
+	deleteSessionCookies(c);
 
 	return c.redirect(c.var.prevUrl);
 });
