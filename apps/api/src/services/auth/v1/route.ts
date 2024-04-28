@@ -232,8 +232,9 @@ const withSession: MiddlewareHandler<{
 
 			setCookie(c, 'session_id', session, {
 				expires,
+				sameSite: 'None',
+				secure: true,
 				...c.env.DEV ? {} : {
-					secure: true,
 					domain: '.cheda.kr',
 				},
 			});
@@ -448,17 +449,19 @@ app.get('/callback', async (c) => {
 
 	setCookie(c, 'session_id', session, {
 		expires,
+		sameSite: 'None',
+		secure: true,
 		...c.env.DEV ? {} : {
-			secure: true,
 			domain: '.cheda.kr',
 		},
 	});
 
 	setCookie(c, 'session_sid', securedSession, {
 		httpOnly: true,
+		sameSite: 'None',
+		secure: true,
 		expires,
 		...c.env.DEV ? {} : {
-			secure: true,
 			domain: '.cheda.kr',
 		},
 	});
