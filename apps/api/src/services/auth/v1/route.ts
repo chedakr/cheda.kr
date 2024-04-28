@@ -190,7 +190,7 @@ const withSession: MiddlewareHandler<{
 		const payload = await verifyToken<SessionPayload>(c, sessionId);
 		let user = payload['http:cheda.kr/user'];
 
-		const threshold = 1000 * 60 * 10;
+		const threshold = 1000 * 60 * 30;
 		if (new Date(payload.exp! * 1000).getTime() <= Date.now() + threshold) {
 			const securedToken = await decryptToken(c, sessionSid);
 			const securedPayload = await verifyToken<SecuredSessionPayload>(c, securedToken);
