@@ -38,4 +38,17 @@ app.get('/', async (c) => {
 
 app.route('/services/auth/v1', auth);
 
+app.use('/services/buffer/v1/*', async (c, next) => {
+	if (c.env.DEV) {
+		const reqUrl = new URL(c.req.url);
+		reqUrl.host = 'localhost:8788';
+
+		const response = await fetch(reqUrl, {
+			headers: c.req.header()
+		});
+		c.res = new Response(response.body, response);
+	}
+	await next();
+});
+
 export default app;
