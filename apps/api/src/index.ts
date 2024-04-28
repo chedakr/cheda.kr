@@ -20,7 +20,6 @@ app.use('*', cors({
 		if (c.env.DEV) {
 			return origin;
 		}
-
 		try {
 			const originUrl = new URL(origin);
 			if (originUrl.hostname === 'cheda.kr' || originUrl.hostname.endsWith('.cheda.kr')) {

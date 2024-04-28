@@ -488,6 +488,7 @@ app.get('/me', withSession, async (c) => {
 	const result = await response.json() as NidMeResponse;
 
 	return c.json({
+		id: result.response.id,
 		name: result.response.nickname,
 		image: result.response.profile_image,
 	});
