@@ -180,73 +180,66 @@ const withSession: MiddlewareHandler<{
 		};
 	};
 }> = async (c, next) => {
-	class InvalidToken extends Error {}
-
-	try {
-		const sessionId = getCookie(c, 'session_id');
-		const sessionSid = getCookie(c, 'session_sid');
-		if (!sessionId || !sessionSid) throw new InvalidToken();
-
-		const payload = await verifyToken<SessionPayload>(c, sessionId);
-		let user = payload['http:cheda.kr/user'];
-
-		const threshold = 1000 * 60 * 30;
-		if (new Date(payload.exp! * 1000).getTime() <= Date.now() + threshold) {
-			const securedToken = await decryptToken(c, sessionSid);
-			const securedPayload = await verifyToken<SecuredSessionPayload>(c, securedToken);
-			const { refreshToken } = securedPayload['http:cheda.kr/user'];
-
-			const url = new URL('https://nid.naver.com/oauth2.0/token');
-			url.searchParams.append('grant_type', 'refresh_token');
-			url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
-			url.searchParams.append('client_secret', c.env.OAUTH_CLIENT_SECRET_NAVER);
-			url.searchParams.append('refresh_token', refreshToken);
-
-			const response = await fetch(url);
-			const result = await response.json() as RefreshTokenResponse;
-
-			const headers = {
-				'Authorization': `Bearer ${result.access_token}`,
-			};
-
-			const [meResult, verifyResult] = await Promise.all([
-				fetch('https://openapi.naver.com/v1/nid/me', { headers }).then(r => r.json()) as Promise<NidMeResponse>,
-				fetch('https://openapi.naver.com/v1/nid/verify?info=true', { headers }).then(r => r.json()) as Promise<NidVerifyResponse>
-			]);
-
-			user = {
-				userId: meResult.response.id,
-				userName: meResult.response.nickname,
-				userImage: meResult.response.profile_image,
-				accessToken: result.access_token,
-			};
-			const expires = new Date(verifyResult.response.expire_date);
-
-			const session = await signToken(
-				c,
-				prefixRoot(JWT_PREFIX, {
-					user,
-				}) satisfies SessionPayload,
-				expires
-			);
-
-			setCookie(c, 'session_id', session, {
-				expires,
-				sameSite: 'None',
-				secure: true,
-				...c.env.DEV ? {} : {
-					domain: '.cheda.kr',
-				},
-			});
-		}
-		c.set('session', { user });
-	} catch (e) {
-		if (e instanceof InvalidToken) {
-			deleteSessionCookies(c);
-			return c.json({ message: 'Unauthorized' }, 401);
-		}
-		throw e;
+	const sessionId = getCookie(c, 'session_id');
+	const sessionSid = getCookie(c, 'session_sid');
+	if (!sessionId || !sessionSid) {
+		deleteSessionCookies(c);
+		return c.json({ message: 'Unauthorized' }, 401);
 	}
+
+	let user;
+	try {
+		const payload = await verifyToken<SessionPayload>(c, sessionId);
+		user = payload['http:cheda.kr/user'];
+	} catch (e) {
+		const securedToken = await decryptToken(c, sessionSid);
+		const securedPayload = await verifyToken<SecuredSessionPayload>(c, securedToken);
+		const { refreshToken } = securedPayload['http:cheda.kr/user'];
+
+		const url = new URL('https://nid.naver.com/oauth2.0/token');
+		url.searchParams.append('grant_type', 'refresh_token');
+		url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
+		url.searchParams.append('client_secret', c.env.OAUTH_CLIENT_SECRET_NAVER);
+		url.searchParams.append('refresh_token', refreshToken);
+
+		const response = await fetch(url);
+		const result = await response.json() as RefreshTokenResponse;
+
+		const headers = {
+			'Authorization': `Bearer ${result.access_token}`,
+		};
+
+		const [meResult, verifyResult] = await Promise.all([
+			fetch('https://openapi.naver.com/v1/nid/me', { headers }).then(r => r.json()) as Promise<NidMeResponse>,
+			fetch('https://openapi.naver.com/v1/nid/verify?info=true', { headers }).then(r => r.json()) as Promise<NidVerifyResponse>
+		]);
+
+		user = {
+			userId: meResult.response.id,
+			userName: meResult.response.nickname,
+			userImage: meResult.response.profile_image,
+			accessToken: result.access_token,
+		};
+		const expires = new Date(verifyResult.response.expire_date);
+
+		const session = await signToken(
+			c,
+			prefixRoot(JWT_PREFIX, {
+				user,
+			}) satisfies SessionPayload,
+			expires
+		);
+
+		setCookie(c, 'session_id', session, {
+			expires,
+			sameSite: 'None',
+			secure: true,
+			...c.env.DEV ? {} : {
+				domain: '.cheda.kr',
+			},
+		});
+	}
+	c.set('session', { user });
 
 	await next();
 };
