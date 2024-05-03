@@ -435,7 +435,7 @@ app.get('/callback', async (c) => {
 		expires
 	);
 
-	const weekLater = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+	const monthLater = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
 	let securedSession = await signToken(
 		c,
 		prefixRoot(JWT_PREFIX, {
@@ -443,7 +443,7 @@ app.get('/callback', async (c) => {
 				refreshToken: user.refreshToken,
 			},
 		}) satisfies SecuredSessionPayload,
-		weekLater,
+		monthLater,
 	);
 	securedSession = await encryptToken(c, securedSession);
 
