@@ -272,18 +272,6 @@ app.use('*', cors({
 }));
 
 app.get('/logout', withPrevUrl, async (c) => {
-	/*
-	const url = new URL('https://nid.naver.com/oauth2.0/token');
-	url.searchParams.append('grant_type', 'delete');
-	url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
-	url.searchParams.append('client_secret', c.env.OAUTH_CLIENT_SECRET_NAVER);
-	url.searchParams.append('access_token', user.accessToken);
-	url.searchParams.append('service_provider', 'NAVER');
-
-	const response = await fetch(url);
-	const result = await response.json() as DeleteTokenRespone;
-	*/
-
 	try {
 		// access token 갱신 요청으로 이전 토큰을 무효화
 		const sessionSid = getCookie(c, 'session_sid')!;
@@ -492,6 +480,29 @@ app.get('/me', withSession, async (c) => {
 		name: result.response.nickname,
 		image: result.response.profile_image,
 	});
+});
+
+app.delete('/me', withSession, async (c) => {
+	const { user } = c.var.session;
+
+	const url = new URL('https://nid.naver.com/oauth2.0/token');
+	url.searchParams.append('grant_type', 'delete');
+	url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
+	url.searchParams.append('client_secret', c.env.OAUTH_CLIENT_SECRET_NAVER);
+	url.searchParams.append('access_token', user.accessToken);
+	url.searchParams.append('service_provider', 'NAVER');
+
+	const response = await fetch(url);
+	const result = await response.json() as DeleteTokenRespone;
+
+	const db = drizzle(c.env.DB);
+
+	await db.delete(usersTable)
+		.where(eq(usersTable.userId, user.userId));
+
+	deleteSessionCookies(c);
+
+	return c.json(result);
 });
 
 export default app;
