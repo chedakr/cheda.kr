@@ -182,17 +182,13 @@ const withSession: MiddlewareHandler<{
 }> = async (c, next) => {
 	const sessionId = getCookie(c, 'session_id');
 	const sessionSid = getCookie(c, 'session_sid');
-	if (!sessionId || !sessionSid) {
-		deleteSessionCookies(c);
-		return c.json({ message: 'Unauthorized' }, 401);
-	}
 
 	let user;
 	try {
-		const payload = await verifyToken<SessionPayload>(c, sessionId);
+		const payload = await verifyToken<SessionPayload>(c, sessionId ?? '');
 		user = payload['http:cheda.kr/user'];
 	} catch (e) {
-		const securedToken = await decryptToken(c, sessionSid);
+		const securedToken = await decryptToken(c, sessionSid ?? '');
 		const securedPayload = await verifyToken<SecuredSessionPayload>(c, securedToken);
 		const { refreshToken } = securedPayload['http:cheda.kr/user'];
 
