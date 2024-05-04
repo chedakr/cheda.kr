@@ -139,7 +139,14 @@ const verifyToken = async <T extends Record<string, any>, C extends Context = Co
 	return payload;
 };
 
-const signToken = async <T extends Record<string, any>, C extends Context = Context>(context: C, payload: T, expires: string | number | Date) => {
+const signToken = async <
+	T extends Record<string, any>,
+	C extends Context = Context
+>(
+	context: C,
+	payload: T,
+	expires: string | number | Date
+) => {
 	const privateKey = await jose.importPKCS8(u8ToString(jose.base64url.decode(context.env.JWT_SECRET_KEY)), 'ES256');
 	const jwt = await new jose.SignJWT(payload)
 		.setProtectedHeader({ alg: 'ES256' })
@@ -437,7 +444,7 @@ app.get('/callback', async (c) => {
 		httpOnly: true,
 		sameSite: 'None',
 		secure: true,
-		expires,
+		expires: monthLater,
 		...c.env.DEV ? {} : {
 			domain: '.cheda.kr',
 		},
