@@ -11,7 +11,5 @@ export const users = sqliteTable('users', {
 	return {
 		idxUserId: uniqueIndex('idx_users_user_id').on(table.userId),
 		idxUserName: index('idx_users_user_name').on(table.userName),
-		idxCreatedAt: index('idx_users_created_at').on(table.createdAt),
-		idxUpdatedAt: index('idx_users_updated_at').on(table.updatedAt),
 	};
 });
