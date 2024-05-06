@@ -43,9 +43,7 @@ app.use('/services/buffer/v1/*', async (c, next) => {
 		const reqUrl = new URL(c.req.url);
 		reqUrl.host = 'localhost:8788';
 
-		const response = await fetch(reqUrl, {
-			headers: c.req.header()
-		});
+		const response = await fetch(reqUrl, c.req.raw.clone());
 		c.res = new Response(response.body, response);
 	}
 	await next();
