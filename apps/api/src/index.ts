@@ -16,6 +16,7 @@ app.onError((err, c) => {
 });
 
 app.use('*', cors({
+	credentials: true,
 	origin: (origin, c) => {
 		if (c.env.DEV) {
 			return origin;
