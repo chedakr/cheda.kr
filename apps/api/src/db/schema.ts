@@ -5,6 +5,7 @@ export const users = sqliteTable('users', {
 	userId: text('user_id').notNull(),
 	userName: text('user_name').notNull(),
 	userImage: text('user_image'),
+	userType: text('user_type').notNull(),
 	createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 	updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 }, (table) => {

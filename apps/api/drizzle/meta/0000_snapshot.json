@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "sqlite",
-  "id": "adb7d579-e149-4d0e-9c32-f5c0f77d5f8a",
+  "id": "21a996cf-3dbe-41e4-b796-aeae28f4e6fd",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "users": {
@@ -35,6 +35,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "user_type": {
+          "name": "user_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -47,34 +54,6 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "access_token": {
-          "name": "access_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "refresh_token": {
-          "name": "refresh_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "token_type": {
-          "name": "token_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "expire_at": {
-          "name": "expire_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         }
       },
@@ -90,20 +69,6 @@
           "name": "idx_users_user_name",
           "columns": [
             "user_name"
-          ],
-          "isUnique": false
-        },
-        "idx_users_created_at": {
-          "name": "idx_users_created_at",
-          "columns": [
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "idx_users_updated_at": {
-          "name": "idx_users_updated_at",
-          "columns": [
-            "updated_at"
           ],
           "isUnique": false
         }

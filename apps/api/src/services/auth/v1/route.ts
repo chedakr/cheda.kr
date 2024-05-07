@@ -396,6 +396,7 @@ app.get('/callback', async (c) => {
 				userId: meResult.response.id,
 				userName: meResult.response.nickname,
 				userImage: meResult.response.profile_image,
+				userType: 'normal',
 				createdAt: now,
 				updatedAt: now,
 			});
