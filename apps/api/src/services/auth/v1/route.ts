@@ -195,6 +195,9 @@ const withSession: MiddlewareHandler<{
 		const payload = await verifyToken<SessionPayload>(c, sessionId ?? '');
 		user = payload['http:cheda.kr/user'];
 	} catch (e) {
+		if (!sessionSid) {
+			return c.json({ message: 'Unauthorized' }, 401);
+		}
 		const securedToken = await decryptToken(c, sessionSid ?? '');
 		const securedPayload = await verifyToken<SecuredSessionPayload>(c, securedToken);
 		const { refreshToken } = securedPayload['http:cheda.kr/user'];
