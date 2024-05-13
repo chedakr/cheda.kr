@@ -5,7 +5,7 @@ import bufferLogoImage from './icon-resized.png';
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-[100dvh] break-keep">
+    <div className="flex flex-col min-h-[calc(100vh-200px)] break-keep">
       <main className="flex-1">
         <section className="w-full py-6 md:py-12 lg:py-16 xl:py-24">
           <div className="container grid gap-4 px-4 text-center md:px-6 xl:gap-10">

@@ -4,6 +4,7 @@ import { GoogleAnalytics } from '@next/third-parties/google';
 import ReactQueryProvider from "@/components/react-query-provider";
 import { ThemeProvider } from '@/components/theme-provider';
 import Header from '@/components/header';
+import Footer from '@/components/footer';
 import { cn } from '@/lib/utils';
 import { notoSans } from './fonts';
 
@@ -37,6 +38,7 @@ export default function RootLayout({
               <main className="flex flex-col items-center justify-center">
                 {children}
               </main>
+              <Footer />
             </div>
           </ReactQueryProvider>
         </ThemeProvider>
