@@ -30,7 +30,7 @@ function LoginButton() {
     if (auth.data?.loggedIn) {
       router.push(prevUrl || '/');
     }
-  }, [auth.data]);
+  }, [router, prevUrl, auth.data]);
 
   return <NaverLoginButton prevUrl={decodeURIComponent(prevUrl)} />;
 }
