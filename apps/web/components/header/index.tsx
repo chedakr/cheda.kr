@@ -29,7 +29,7 @@ export default function Header() {
             <Github className="h-[1.2rem] w-[1.2rem]" />
           </Link>
         </Button>
-        <div className="flex justify-center w-20">
+        <div className="flex justify-center w-16">
           <LoginButton />
         </div>
       </nav>
