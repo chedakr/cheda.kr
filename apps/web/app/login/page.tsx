@@ -7,7 +7,7 @@ import useAuth from '@/hooks/useAuth';
 
 export default function LoginPage() {
   return (
-    <div className="flex flex-col space-y-5 justify-center items-center min-h-[calc(100vh-60px)]">
+    <div className="flex flex-col space-y-5 justify-center items-center min-h-[calc(100vh-100px)]">
       <h2 className="text-3xl font-bold">
         체다 서비스에 로그인
       </h2>
