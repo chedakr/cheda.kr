@@ -1,3 +1,5 @@
+"use client";
+
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -6,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import ThemeToggle from "@/components/theme-toggle";
 import { blackHanSans } from '@/app/fonts';
 import { cn } from '@/lib/utils';
+import LoginButton from './login-button';
 import logoImage from './cheda-transparent.png';
 
 export default function Header() {
@@ -26,6 +29,9 @@ export default function Header() {
             <Github className="h-[1.2rem] w-[1.2rem]" />
           </Link>
         </Button>
+        <div className="flex justify-center w-20">
+          <LoginButton />
+        </div>
       </nav>
     </header>
   );

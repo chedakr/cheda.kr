@@ -1,5 +1,6 @@
 import { Hono, MiddlewareHandler, Context } from 'hono';
 import { cors } from 'hono/cors';
+import { csrf } from 'hono/csrf'
 import { HTTPException } from 'hono/http-exception';
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
 import * as jose from 'jose';
@@ -269,6 +270,18 @@ app.use('*', cors({
 	},
 	credentials: true,
 }));
+
+app.get(
+	'/logout',
+	csrf({
+		origin: (origin, c) => {
+			if (c.env.DEV) {
+				return true;
+			}
+			return /https:\/\/(\w+\.)cheda\.kr/.test(origin);
+		},
+	})
+);
 
 app.get('/logout', withPrevUrl, async (c) => {
 	try {
