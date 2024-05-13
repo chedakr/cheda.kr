@@ -17,6 +17,7 @@ routes = [
 [vars]
 OAUTH_CLIENT_ID_NAVER = "aBv6Idu9xDrzo71qfpak"
 API_ORIGIN = "https://api.cheda.kr"
+JWT_PUBLIC_KEY = "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFckFqM2hEQnpSTmZuSXhWS2lOOHFWNWVXZmJYSAp3RHVyTXNQWGx6Q2dRY3lyNzV2dThYaXpOcTVaVHdma003R1ZPTkhRNEJ6OUVHNnNKbGQzZE8yR3dnPT0KLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg"
 
 # Bind the Workers AI model catalog. Run machine learning models, powered by serverless GPUs, on Cloudflare’s global network
 # Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#workers-ai
