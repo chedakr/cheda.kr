@@ -6,7 +6,7 @@ export default function Footer() {
       </div>
       <div className="text-sm text-gray-400 dark:text-gray-500">
         <p>본 사이트는 NAVER Corp.에서 운영하는 사이트가 아닙니다.</p>
-        <p>"치지직" 혹은 "chzzk"은 NAVER Corp.의 등록 상표입니다.</p>
+        <p>&quot;치지직&quot; 혹은 &quot;chzzk&quot;은 NAVER Corp.의 등록 상표입니다.</p>
       </div>
     </footer>
   );
