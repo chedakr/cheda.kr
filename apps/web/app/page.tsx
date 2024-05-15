@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 import bufferLogoImage from './icon-resized.png';
@@ -22,7 +23,7 @@ export default function Home() {
           </div>
         </section>
         <section className="w-full py-12 md:py-18">
-          <div className="container grid gap-6 px-4 text-center md:px-6 lg:grid-cols-1 lg:gap-10">
+          <div className="container grid gap-6 px-4 text-center md:px-6 lg:grid-cols-2 lg:gap-10">
             <div className="flex flex-col items-center space-y-2">
               <Image src={bufferLogoImage} width="57" height="57" alt="버퍼 로고" unoptimized />
               <div className="space-y-1">
@@ -33,6 +34,18 @@ export default function Home() {
                 <Link href="https://buffer.cheda.kr">
                   이동 &rarr;
                 </Link>
+              </Button>
+            </div>
+            <div className="flex flex-col items-center space-y-2">
+              <Package size={57} className="text-muted" />
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold">???</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  다음은 어떤 서비스가 추가 될까요? 기대해주세요!
+                </p>
+              </div>
+              <Button variant="outline" disabled>
+                이동 &rarr;
               </Button>
             </div>
           </div>
