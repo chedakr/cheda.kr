@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 import bufferLogoImage from './icon-resized.png';
 
@@ -22,13 +23,18 @@ export default function Home() {
         </section>
         <section className="w-full py-12 md:py-18">
           <div className="container grid gap-6 px-4 text-center md:px-6 lg:grid-cols-1 lg:gap-10">
-            <Link href="https://buffer.cheda.kr" className="flex flex-col items-center space-y-2">
+            <div className="flex flex-col items-center space-y-2">
               <Image src={bufferLogoImage} width="57" height="57" alt="버퍼 로고" unoptimized />
               <div className="space-y-1">
                 <h3 className="text-lg font-bold">버퍼 확장 프로그램</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">스트리밍 플랫폼 치지직 기능 확장</p>
               </div>
-            </Link>
+              <Button variant="outline" asChild>
+                <Link href="https://buffer.cheda.kr">
+                  이동 &rarr;
+                </Link>
+              </Button>
+            </div>
           </div>
         </section>
       </main>
