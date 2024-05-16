@@ -119,7 +119,13 @@ const withPrevUrl: MiddlewareHandler<{
 
 			prevUrl = payload['http:cheda.kr/state'].url;
 
-			deleteCookie(c, 'state');
+			deleteCookie(c, 'state', {
+				httpOnly: true,
+				...c.env.DEV ? {} : {
+					secure: true,
+					domain: '.cheda.kr',
+				},
+			});
 		}
 	} catch (e) {
 		console.error(e);
@@ -173,8 +179,21 @@ const decryptToken = async <C extends Context = Context>(context: C, token: stri
 };
 
 const deleteSessionCookies = (c: Context) => {
-	deleteCookie(c, 'session_id');
-	deleteCookie(c, 'session_sid');
+	deleteCookie(c, 'session_id', {
+		sameSite: 'None',
+		secure: true,
+		...c.env.DEV ? {} : {
+			domain: '.cheda.kr',
+		},
+	});
+	deleteCookie(c, 'session_sid', {
+		httpOnly: true,
+		sameSite: 'None',
+		secure: true,
+		...c.env.DEV ? {} : {
+			domain: '.cheda.kr',
+		},
+	});
 };
 
 const withSession: MiddlewareHandler<{
@@ -349,7 +368,13 @@ app.get('/callback', async (c) => {
 		console.error(e);
 		/* noop */
 	} finally {
-		deleteCookie(c, 'state');
+		deleteCookie(c, 'state', {
+			httpOnly: true,
+			...c.env.DEV ? {} : {
+				secure: true,
+				domain: '.cheda.kr',
+			},
+		});
 	}
 
 	if (!state) {
