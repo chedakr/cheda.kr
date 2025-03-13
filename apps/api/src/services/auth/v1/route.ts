@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { Env } from '@/typings';
 import { users as usersTable } from '@/db/schema';
+import retry from 'async-retry';
 
 type ErrorResponse = {
 	error: string;
@@ -397,8 +398,21 @@ app.get('/callback', async (c) => {
 	url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
 	url.searchParams.append('client_secret', c.env.OAUTH_CLIENT_SECRET_NAVER);
 	url.searchParams.append('code', code);
+	url.searchParams.append('state', id);
 
-	const response = await fetch(url);
+	// See: https://developers.naver.com/forum/posts/36719
+	const response = await retry(
+		async (_bail) => {
+			const response = await fetch(url);
+			if (response.status === 525) {
+				throw new Error('Retry');
+			}
+			return response;
+		},
+		{
+			minTimeout: 100,
+		},
+	);
 
 	if (!response.ok) {
 		return c.redirect(prevUrl);
