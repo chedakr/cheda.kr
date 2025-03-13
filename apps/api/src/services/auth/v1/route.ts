@@ -397,6 +397,7 @@ app.get('/callback', async (c) => {
 	url.searchParams.append('client_id', c.env.OAUTH_CLIENT_ID_NAVER);
 	url.searchParams.append('client_secret', c.env.OAUTH_CLIENT_SECRET_NAVER);
 	url.searchParams.append('code', code);
+	url.searchParams.append('state', id);
 
 	const response = await fetch(url);
 
