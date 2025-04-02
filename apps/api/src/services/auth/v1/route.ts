@@ -165,6 +165,7 @@ const signToken = async <
 };
 
 const encryptToken = async <C extends Context = Context>(context: C, token: string) => {
+	// 암호화된 토큰은 서버측에서 사용하는것이 목적이기 때문에 암호화에 공개키를 사용
 	const publicKey = await jose.importSPKI(u8ToString(jose.base64url.decode(context.env.JWT_PUBLIC_KEY)), 'ECDH-ES');
 	const jwe = await new jose.CompactEncrypt(new TextEncoder().encode(token))
 		.setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM' })
