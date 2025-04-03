@@ -81,8 +81,8 @@ type PrefixRoot<TPrefix extends string, TValue extends { [k: string]: any }> = {
 }
 
 function prefixRoot<
-	const TPrefix extends string,
-	const TValue extends { [k: string]: any }
+  const TPrefix extends string,
+  const TValue extends { [k: string]: any }
 > (prefix: TPrefix, value: TValue) {
   return Object.fromEntries(
     Object.entries(value).map(([k, v]) => [`${prefix}${k}`, v])
@@ -150,8 +150,8 @@ const verifyToken = async <T extends Record<string, any>, C extends Context = Co
 }
 
 const signToken = async <
-	T extends Record<string, any>,
-	C extends Context = Context
+  T extends Record<string, any>,
+  C extends Context = Context
 >(
   context: C,
   payload: T,
@@ -258,10 +258,10 @@ const withSession: MiddlewareHandler<{
 
     const session = await signToken(
       c,
-			prefixRoot(JWT_PREFIX, {
-			  user,
-			}) satisfies SessionPayload,
-			expires
+      prefixRoot(JWT_PREFIX, {
+        user,
+      }) satisfies SessionPayload,
+      expires
     )
 
     setCookie(c, 'session_id', session, {
@@ -477,26 +477,26 @@ app.get('/callback', async (c) => {
 
   const session = await signToken(
     c,
-		prefixRoot(JWT_PREFIX, {
-		  user: {
-		    userId: user.userId,
-		    userName: user.userName,
-		    userImage: user.userImage,
-		    accessToken: user.accessToken,
-		  },
-		}) satisfies SessionPayload,
-		expires
+    prefixRoot(JWT_PREFIX, {
+      user: {
+        userId: user.userId,
+        userName: user.userName,
+        userImage: user.userImage,
+        accessToken: user.accessToken,
+      },
+    }) satisfies SessionPayload,
+    expires
   )
 
   const monthLater = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30)
   let securedSession = await signToken(
     c,
-		prefixRoot(JWT_PREFIX, {
-		  user: {
-		    refreshToken: user.refreshToken,
-		  },
-		}) satisfies SecuredSessionPayload,
-		monthLater
+    prefixRoot(JWT_PREFIX, {
+      user: {
+        refreshToken: user.refreshToken,
+      },
+    }) satisfies SecuredSessionPayload,
+    monthLater
   )
   securedSession = await encryptToken(c, securedSession)
 
