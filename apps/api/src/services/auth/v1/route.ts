@@ -247,7 +247,9 @@ const withSession: MiddlewareHandler<{
 			userImage: meResult.response.profile_image,
 			accessToken: result.access_token,
 		};
-		const expires = new Date(verifyResult.response.expire_date);
+		let expires = new Date(verifyResult.response.expire_date);
+		// API에서 제공하는 expire_date가 한국 시간 기준이라 9시간을 빼줌
+		expires = new Date(expires.getTime() - 9 * 60 * 60 * 1000);
 
 		const session = await signToken(
 			c,
@@ -439,7 +441,9 @@ app.get('/callback', async (c) => {
 		refreshToken: result.refresh_token,
 		tokenType: result.token_type,
 	};
-	const expires = new Date(verifyResult.response.expire_date);
+	let expires = new Date(verifyResult.response.expire_date);
+	// API에서 제공하는 expire_date가 한국 시간 기준이라 9시간을 빼줌
+	expires = new Date(expires.getTime() - 9 * 60 * 60 * 1000);
 
 	const db = drizzle(c.env.DB);
 	try {
